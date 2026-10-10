@@ -1,71 +1,135 @@
-# RestedXP Re-Encrypt
+# WoW Forever Guide Tool
 
-**TL;DR:** RestedXP costs €50 and locks features behind an authentication key that's checked locally (no internet connection). This violates Blizzard's Addon Policy on multiple levels. I built a tool that lets people who already own the addon share access with their friends/guildmates — because nobody should have to pay €50 per person for what Blizzard says must be free. And RestedXP isn't the only one — NaowUI is heading down the same path. All code runs local on your machine and everything is open sourced.
+A private community website for preparing the current WoW Forever guide for a
+user's BattleTag. The built-in guide and custom uploads are decrypted and
+re-encrypted in the user's browser.
 
-**Live:** https://restedxp-reencrypt.vercel.app/
+The application does not provide authentication. Deploy it behind your existing
+authentication layer.
 
-**GitHub:** https://github.com/mkccl/restedxp-reencrypt
+## Requirements
 
----
+- Node.js 20.9 or newer
+- npm
+- A compatible encrypted guide export
+- The exact source BattleTag used to encrypt that export
 
-## The Problem
+## Local development
 
-There's an addon called **RestedXP** (restedxp.com) being sold for **€50**. You buy a key to unlock an import string. The addon itself checks your authentication key **locally** — no server call, no internet verification, just an internal string comparison inside the Lua code.
+```bash
+npm ci
+npm run dev
+```
 
-And this isn't an isolated case — **NaowUI** is going down the exact same route. If we don't push back now, this becomes the new normal.
+Open `http://localhost:3000`.
 
-Here's where it gets interesting: **Blizzard's UI Add-On Development Policy** is crystal clear on this:
+## Prepare the current guide
 
-> **1) Add-ons must be free of charge.**
-> All add-ons must be distributed free of charge. Developers may not create "premium" versions of add-ons with additional for-pay features, charge money to download an add-on, charge for services related to the add-on, or otherwise require some form of monetary compensation to download or access an add-on.
+The private source file and personal BattleTag must never be committed. The
+`.private/` directory is ignored by Git.
 
-> **2) Add-on code must be completely visible.**
-> The programming code of an add-on must in no way be hidden or obfuscated, and must be freely accessible to and viewable by the general public.
+1. Create `.private/` in the project root.
+2. Save the current encrypted export as `.private/source-guide.txt`.
+3. Save its source BattleTag as the only line in
+   `.private/source-battletag.txt`.
+4. Run:
 
-This addon violates **both** of these rules. It's paywalled at €50 and uses an authentication mechanism to gate content — which is a form of code obfuscation and access restriction.
+```bash
+npm run prepare:guide
+```
 
-## What the Tool Does
+The command decrypts the source locally, verifies its checksum and guide count,
+re-encrypts it to the generic site key, verifies an exact round trip, and writes
+`public/guide-wow-forever.txt`.
 
-Let me be clear about what this tool **does and doesn't do:**
+To publish an update, replace the two private input files, run the same command,
+test the generated guide, and deploy from that local working tree. The prepared
+artifact is intentionally ignored by Git so it cannot leak through the public
+fork.
 
-- ✅ It allows someone who **already purchased** the addon to generate a shareable key for their friends or guildmates
-- ✅ It rewrites the local authentication key so that additional users within the same friend group / guild can use the addon
-- ❌ It does **not** crack, pirate, or redistribute the addon itself
-- ❌ It does **not** bypass any server-side protection (there is none)
-- ❌ It does **not** prevent the original creator from making money — someone in the group still needs to have bought it
+## Linux server deployment
 
-Think of it like this: One person in your guild buys it, and their friends don't have to pay €50 *each* just to access something that **should be free in the first place** according to Blizzard's own rules.
+Clone the customized fork on the server that will run the website:
 
-## Why This Matters Beyond One Addon
+```bash
+git clone https://github.com/Brandon-Crow/restedxp-reencrypt.git
+cd restedxp-reencrypt
+npm ci
+mkdir -p .private
+```
 
-This isn't just about €50. It's about a growing trend in the WoW addon space where creators like RestedXP exploit a loophole:
+Add these two files directly on the server:
 
-- They sell "import strings" or "configurations" behind Twitch subs or Patreon tiers
-- They use local authentication checks to lock down what is essentially addon functionality
-- They rely on the fact that Blizzard rarely enforces their own addon policy
+```text
+.private/source-guide.txt
+.private/source-battletag.txt
+```
 
-If we normalize €50 paywalls on addons, what's next? We're already seeing it spread — NaowUI is next in line. Paid DBM? Premium WeakAura packs with DRM? The addon ecosystem has always been built on community and open access — that's literally what Blizzard's policy protects.
+The BattleTag file must contain only the exact source BattleTag. Build the
+deployable application and start it:
 
-## The Legal Side (for the curious)
+```bash
+npm run deploy:build
+npm run start -- --hostname 127.0.0.1 --port 3000
+```
 
-For those wondering about legality:
+Point the existing authenticated website or reverse proxy to
+`http://127.0.0.1:3000`. It must protect all paths, including
+`/guide-wow-forever.txt`.
 
-- **Blizzard's Addon Policy** explicitly requires addons to be free and open-source. The addon creator is the one violating the rules here, not the users.
-- Under both **EU copyright law** and the **DMCA**, anti-circumvention rules generally protect "effective technological measures." A local Lua string comparison with zero server verification is a stretch to call an "effective" protection measure — especially when Blizzard's own policy requires the code to be fully visible and unobfuscated in the first place.
-- In the EU specifically, anti-circumvention provisions do **not apply to computer programs** in the same way they apply to film or music DRM. Software has explicit carve-outs that allow things like interoperability and backup copies.
-- The addon creator is operating **outside of Blizzard's rules** by charging money and obfuscating access. It's hard to argue that circumventing a protection mechanism is illegal when the protection mechanism itself shouldn't exist according to the platform's own policy.
+Use your container's process supervisor to keep `npm run start` running and to
+restart it after a new build. The `.next/` output and prepared guide must remain
+on the server at runtime.
 
-That said, I'm not a lawyer. I'm sharing what I've researched. If anyone has more expertise here, I'd love to hear your take.
+### Update the guide
 
-## What You Can Do
+Replace `.private/source-guide.txt` and update
+`.private/source-battletag.txt` if its source BattleTag changed, then run:
 
-1. **Report the addon to Blizzard** — File a ticket or post on the official forums. Reference the UI Add-On Development Policy directly.
-2. **Report the Twitch channel** — Gating non-Twitch content behind subscriptions is questionable under Twitch's own monetization guidelines.
+```bash
+npm run deploy:build
+# Restart the running Next.js process with your process supervisor.
+```
 
----
+### Update the application
 
-The WoW addon community has thrived for 20 years because of openness and sharing. Let's not let a €50 paywall change that.
+The server's `.private/` files survive normal Git updates because they are
+ignored. Update and rebuild with:
 
-**Edit:** To be clear, I have nothing against addon creators making money. Patreon donations, tip jars on websites, that's all fine. What I'm against is *locking addon functionality behind a paywall with DRM* — which is exactly what Blizzard's policy was designed to prevent.
+```bash
+git pull --ff-only
+npm ci
+npm run deploy:build
+# Restart the running Next.js process with your process supervisor.
+```
 
-**Go and check it out:** https://restedxp-reencrypt.vercel.app/
+## Other production hosting
+
+```bash
+npm run lint
+npm run build
+npm run start
+```
+
+The application can also be deployed to Vercel or another platform that
+supports Next.js 16. The build fails if the prepared artifact is absent. Do not
+connect the public GitHub fork directly because it intentionally does not
+contain that artifact. Prepare the guide and deploy the working tree instead.
+The included `.vercelignore` excludes `.private/` while allowing the prepared
+guide to be included in a Vercel CLI deployment.
+
+Configure your own authentication in front of the deployment. The built-in
+artifact is a static file, so the authentication layer must protect static
+assets as well as pages.
+
+## Privacy model
+
+- Your personal source BattleTag remains in the ignored `.private/` directory.
+- The original encrypted source remains in the ignored `.private/` directory.
+- The prepared artifact is deployed but is never committed to the public fork.
+- The deployed site contains only an artifact encrypted for a generic site key.
+- User BattleTags and custom uploads are processed in the browser.
+- The application has no API routes, database, or application analytics.
+
+Authorized users can retrieve the prepared artifact from the deployed site.
+Only deploy content you are permitted to distribute to those users.

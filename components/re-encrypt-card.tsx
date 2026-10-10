@@ -11,9 +11,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { isValidBattleTag, normalizeBattleTag } from "@/lib/battletag";
 import { decryptGuideFile, encryptForBattletag } from "@/lib/rxp-crypto";
 
-const BATTLETAG_RE = /^.+#\d+$/;
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
 function SwordsIcon({ className }: { className?: string }) {
   return (
@@ -51,10 +52,23 @@ export function ReEncryptCard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((f: File) => {
-    setFile(f);
     setError(null);
     setSuccess(null);
     setResult(null);
+    setFileName(null);
+
+    if (!f.name.toLowerCase().endsWith(".txt")) {
+      setFile(null);
+      setError("Select a .txt guide export.");
+      return;
+    }
+    if (f.size > MAX_FILE_SIZE) {
+      setFile(null);
+      setError("The guide file must be 25 MB or smaller.");
+      return;
+    }
+
+    setFile(f);
 
     const match = f.name.match(/!([^(]+?)\s*(?:\(\d+\))?\.txt$/i);
     if (match) {
@@ -74,9 +88,9 @@ export function ReEncryptCard() {
 
   const handleProcess = async () => {
     if (!file) return setError("Select a guide file first, champion.");
-    if (!BATTLETAG_RE.test(sourceTag))
+    if (!isValidBattleTag(sourceTag))
       return setError("Invalid source BattleTag. Format: Name#12345");
-    if (!BATTLETAG_RE.test(destTag))
+    if (!isValidBattleTag(destTag))
       return setError("Invalid destination BattleTag. Format: Name#12345");
 
     setError(null);
@@ -85,18 +99,25 @@ export function ReEncryptCard() {
     setProcessing(true);
 
     try {
+      const normalizedSourceTag = normalizeBattleTag(sourceTag);
+      const normalizedDestinationTag = normalizeBattleTag(destTag);
       const raw = await file.text();
       const { plaintext, version, guideCount } = decryptGuideFile(
         raw,
-        sourceTag,
+        normalizedSourceTag,
       );
-      const output = encryptForBattletag(plaintext, destTag, version);
+      const output = encryptForBattletag(
+        plaintext,
+        normalizedDestinationTag,
+        version,
+      );
 
-      const safeName = `guide_${destTag.replace("#", "_")}.txt`;
+      const safeTag = normalizedDestinationTag.replace(/[^a-z0-9]+/gi, "_");
+      const safeName = `guide_${safeTag}.txt`;
       setResult(output);
       setFileName(safeName);
       setSuccess(
-        `${guideCount} guides re-forged for ${destTag}`,
+        `${guideCount} guide${guideCount === 1 ? "" : "s"} prepared for ${normalizedDestinationTag}`,
       );
     } catch (e) {
       setError(
@@ -115,7 +136,7 @@ export function ReEncryptCard() {
     a.href = url;
     a.download = fileName;
     a.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (
@@ -125,10 +146,10 @@ export function ReEncryptCard() {
           <SwordsIcon className="h-7 w-7 text-gold shrink-0" />
           <div>
             <CardTitle className="font-[var(--font-cinzel)] text-xl tracking-wide text-gold-bright">
-              RestedXP Re-Encrypt
+              Custom Guide Re-Encrypt
             </CardTitle>
             <CardDescription className="mt-1 text-muted-foreground">
-              Re-forge a RestedXP guide export for a different BattleTag.
+              Prepare a compatible guide export for a different BattleTag.
               <br />
               <span className="text-xs opacity-60">
                 All processing happens locally in your browser.
@@ -243,7 +264,7 @@ export function ReEncryptCard() {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                   />
                 </svg>
-                Channeling...
+                Processing...
               </span>
             ) : (
               "Re-Encrypt"

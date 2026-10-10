@@ -171,27 +171,57 @@ export function decryptGuideFile(
   raw: string,
   battletag: string,
 ): DecryptResult {
-  const versionMatch = raw.match(/\|(\d+)$/);
-  const version = versionMatch ? parseInt(versionMatch[1], 10) : 40000;
+  const normalizedRaw = raw.trim();
+  const versionMatch = normalizedRaw.match(/\|(\d+)$/);
+  if (!versionMatch) {
+    throw new Error("The guide file has no valid version marker.");
+  }
+  const version = parseInt(versionMatch[1], 10);
+  const guideCountMatch = normalizedRaw.match(/^(\d+)\|/);
+  if (!guideCountMatch) {
+    throw new Error("The guide file has no valid guide count.");
+  }
+  const declaredGuideCount = parseInt(guideCountMatch[1], 10);
 
   const key16 = deriveKey(battletag);
   const S = rc4Ksa(key16);
 
-  const chunks = [...raw.matchAll(/(-?\d+)(\D)([A-Za-z0-9+/=]+)%/g)];
+  const chunks = [
+    ...normalizedRaw.matchAll(/(-?\d+)(\D)([A-Za-z0-9+/=]+)%/g),
+  ];
   const allGuides: string[] = [];
+  let encryptedChunks = 0;
 
-  for (const [, , mode, content] of chunks) {
+  for (const [, checksumText, mode, content] of chunks) {
     if (mode.charCodeAt(0) === 58) {
       // ':'
+      encryptedChunks++;
       const decoded = base64ToUint8(content);
       const decrypted = rc4Crypt(S, decoded);
       const decompressed = pako.inflate(decrypted);
+      const declaredChecksum = Number(checksumText) >>> 0;
+      if (adler32(decompressed) !== declaredChecksum) {
+        throw new Error(
+          "Guide checksum verification failed. Check the source BattleTag.",
+        );
+      }
       const text = new TextDecoder("utf-8", { fatal: false }).decode(
         decompressed,
       );
       const guides = text.split("\x00").filter((g) => g.trim());
       allGuides.push(...guides);
     }
+  }
+
+  if (encryptedChunks === 0 || allGuides.length === 0) {
+    throw new Error(
+      "No valid encrypted guides were found. Check the file and source BattleTag.",
+    );
+  }
+  if (allGuides.length !== declaredGuideCount) {
+    throw new Error(
+      `Guide count mismatch: expected ${declaredGuideCount}, found ${allGuides.length}.`,
+    );
   }
 
   const plaintext = allGuides.join("\x00");
@@ -204,6 +234,10 @@ export function encryptForBattletag(
   newBattletag: string,
   version: number,
 ): string {
+  if (!plaintext.trim()) {
+    throw new Error("Cannot encrypt an empty guide file.");
+  }
+
   const data = new TextEncoder().encode(plaintext);
   const nGuides = new TextDecoder().decode(data).split("\x00").length;
 

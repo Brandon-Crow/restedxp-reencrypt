@@ -33,6 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Private guide source and source BattleTag used by prepare:guide
+/.private/
+
+# Prepared guide is deployed privately but never committed to the public fork
+/public/guide-wow-forever.txt
+
 # vercel
 .vercel
 

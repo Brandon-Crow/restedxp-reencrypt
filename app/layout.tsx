@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Cinzel } from "next/font/google";
-import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -21,9 +20,9 @@ const cinzel = Cinzel({
 });
 
 export const metadata: Metadata = {
-  title: "RestedXP Re-Encrypt",
+  title: "WoW Forever Guide Tool",
   description:
-    "Re-encrypt RestedXP guide exports for a different BattleTag",
+    "Prepare the current WoW Forever guide for your BattleTag in your browser.",
 };
 
 export default function RootLayout({
@@ -37,7 +36,6 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${cinzel.variable} antialiased`}
       >
         {children}
-        <Analytics />
       </body>
     </html>
   );

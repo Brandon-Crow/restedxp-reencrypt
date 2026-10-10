@@ -12,10 +12,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { isValidBattleTag, normalizeBattleTag } from "@/lib/battletag";
+import { WOW_FOREVER_GUIDE } from "@/lib/guides";
 import { decryptGuideFile, encryptForBattletag } from "@/lib/rxp-crypto";
-import { GUIDES, type GuideConfig } from "@/lib/guides";
-
-const BATTLETAG_RE = /^.+#\d+$/;
 
 function DownloadIcon({ className }: { className?: string }) {
   return (
@@ -75,83 +74,69 @@ export function FreeKeyModal() {
   const [open, setOpen] = useState(false);
   const [tag, setTag] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [processing, setProcessing] = useState<string | null>(null);
-  const [completed, setCompleted] = useState<Set<string>>(new Set());
+  const [processing, setProcessing] = useState(false);
+  const [completed, setCompleted] = useState(false);
 
-  const handleDownload = async (guide: GuideConfig) => {
-    if (!BATTLETAG_RE.test(tag)) {
+  const handleDownload = async () => {
+    if (!isValidBattleTag(tag)) {
       return setError("Invalid BattleTag. Format: YourName#12345");
     }
 
+    const destinationTag = normalizeBattleTag(tag);
     setError(null);
-    setProcessing(guide.id);
+    setProcessing(true);
 
     try {
-      const res = await fetch(guide.guideUrl);
-      if (!res.ok) throw new Error(`Failed to load ${guide.title}.`);
-      const raw = await res.text();
+      const response = await fetch(WOW_FOREVER_GUIDE.guideUrl, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error("The current WoW Forever guide is unavailable.");
+      }
 
-      const { plaintext, version } = decryptGuideFile(raw, guide.sourceTag);
-      const output = encryptForBattletag(plaintext, tag, version);
-
-      const safeName = `${guide.id}_guide_${tag.replace("#", "_")}.txt`;
+      const raw = await response.text();
+      const { plaintext, version } = decryptGuideFile(
+        raw,
+        WOW_FOREVER_GUIDE.sourceTag,
+      );
+      const output = encryptForBattletag(plaintext, destinationTag, version);
+      const safeTag = destinationTag.replace(/[^a-z0-9]+/gi, "_");
       const blob = new Blob([output], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = safeName;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      setCompleted((prev) => new Set(prev).add(guide.id));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `wow_forever_guide_${safeTag}.txt`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setCompleted(true);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Something went wrong.",
+      );
     } finally {
-      setProcessing(null);
+      setProcessing(false);
     }
   };
 
-  const handleDownloadAll = async () => {
-    for (const guide of GUIDES) {
-      if (completed.has(guide.id)) continue;
-      await handleDownload(guide);
-    }
-  };
-
-  const tagValid = BATTLETAG_RE.test(tag);
-  const allDone = GUIDES.every((g) => completed.has(g.id));
+  const tagValid = isValidBattleTag(tag);
 
   return (
     <Dialog
       open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (!v) {
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
           setError(null);
-          setProcessing(null);
-          setCompleted(new Set());
+          setProcessing(false);
+          setCompleted(false);
         }
       }}
     >
       <DialogTrigger asChild>
         <button className="wow-btn-free group relative w-full cursor-pointer overflow-hidden rounded-lg px-6 py-3.5 text-sm font-bold tracking-wide">
           <span className="relative z-10 flex items-center justify-center gap-2">
-            <svg
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.4a2 2 0 0 0-1.903 1.257L5 10 3 8" />
-              <path d="M7 14.354V16" />
-              <path d="M17 14.354V16" />
-              <path d="M21 8v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8" />
-              <path d="M3 10h18" />
-            </svg>
-            Get Your Free Lifetime Keys
+            <DownloadIcon className="h-5 w-5" />
+            Generate Your WoW Forever Guide
           </span>
         </button>
       </DialogTrigger>
@@ -159,103 +144,82 @@ export function FreeKeyModal() {
       <DialogContent className="wow-card border-gold-dim/30 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-[var(--font-cinzel)] text-lg tracking-wide text-gold-bright">
-            Free Lifetime Keys
+            WoW Forever Guide
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Enter your BattleTag, then download whichever guides you want.
-            Everything runs locally in your browser.
+            Enter your BattleTag to prepare the current guide for your account.
+            Processing happens locally in your browser.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
           <div className="space-y-1.5">
-            <Label htmlFor="free-tag" className="text-xs font-medium text-gold-dim">
+            <Label
+              htmlFor="forever-tag"
+              className="text-xs font-medium text-gold-dim"
+            >
               Your BattleTag
             </Label>
             <Input
-              id="free-tag"
+              id="forever-tag"
               placeholder="YourName#12345"
               value={tag}
-              onChange={(e) => { setTag(e.target.value); setError(null); }}
+              onChange={(event) => {
+                setTag(event.target.value);
+                setError(null);
+                setCompleted(false);
+              }}
               className="wow-input"
               autoFocus
             />
             <Alert className="border-gold-dim/20 bg-gold-dim/5">
               <AlertDescription className="text-xs text-gold-dim">
-                RestedXP guides are encrypted to a specific BattleTag. The generated
-                file will only work with the BattleTag you enter here.
+                The generated file only works with the BattleTag entered here.
+                Your BattleTag is not uploaded by this tool.
               </AlertDescription>
             </Alert>
           </div>
 
           {error && (
-            <Alert variant="destructive" className="border-destructive/30 bg-destructive/10">
+            <Alert
+              variant="destructive"
+              className="border-destructive/30 bg-destructive/10"
+            >
               <AlertDescription className="text-sm">{error}</AlertDescription>
             </Alert>
           )}
 
-          <div className="space-y-2">
-            {GUIDES.map((guide) => {
-              const done = completed.has(guide.id);
-              const loading = processing === guide.id;
-              const disabled = !tagValid || loading || !!processing;
-
-              return (
-                <div
-                  key={guide.id}
-                  className="flex items-center justify-between gap-3 rounded-md border border-gold-dim/15 bg-black/20 px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {guide.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {guide.expansion} &middot; Levels {guide.levels}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => handleDownload(guide)}
-                    disabled={disabled || done}
-                    className={`flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all ${
-                      done
-                        ? "border border-green-500/30 bg-green-500/10 text-green-400"
-                        : "wow-btn-gold"
-                    }`}
-                  >
-                    {loading ? (
-                      <>
-                        <Spinner className="h-3.5 w-3.5 animate-spin" />
-                        <span>Generating...</span>
-                      </>
-                    ) : done ? (
-                      <>
-                        <CheckIcon className="h-3.5 w-3.5" />
-                        <span>Downloaded</span>
-                      </>
-                    ) : (
-                      <>
-                        <DownloadIcon className="h-3.5 w-3.5" />
-                        <span>Download</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              );
-            })}
+          <div className="rounded-md border border-gold-dim/15 bg-black/20 p-3">
+            <p className="text-sm font-medium text-foreground">
+              {WOW_FOREVER_GUIDE.title}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {WOW_FOREVER_GUIDE.description}
+            </p>
           </div>
 
           <button
-            onClick={handleDownloadAll}
-            disabled={!tagValid || !!processing || allDone}
-            className="wow-btn-gold w-full rounded-md px-4 py-2.5 text-sm cursor-pointer"
+            onClick={handleDownload}
+            disabled={!tagValid || processing}
+            className="wow-btn-gold w-full cursor-pointer rounded-md px-4 py-2.5 text-sm"
           >
-            {allDone ? "All Guides Downloaded" : "Download All Guides"}
+            {processing ? (
+              <span className="flex items-center justify-center gap-2">
+                <Spinner className="h-4 w-4 animate-spin" />
+                Generating...
+              </span>
+            ) : completed ? (
+              <span className="flex items-center justify-center gap-2">
+                <CheckIcon className="h-4 w-4" />
+                Download Again
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <DownloadIcon className="h-4 w-4" />
+                Generate and Download
+              </span>
+            )}
           </button>
-
-          <p className="text-center text-[11px] text-muted-foreground/50">
-            Your BattleTag never leaves your machine.
-          </p>
         </div>
       </DialogContent>
     </Dialog>

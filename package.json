@@ -1,19 +1,24 @@
 {
-  "name": "rxpguides-reencrypt",
+  "name": "wow-forever-guide-tool",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "tsx scripts/check-guide.ts",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "prepare:guide": "tsx scripts/prepare-guide.ts",
+    "deploy:build": "npm run prepare:guide && npm run build"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   },
   "dependencies": {
-    "@vercel/analytics": "^1.6.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.575.0",
-    "next": "16.1.6",
+    "next": "^16.4.0",
     "pako": "^2.1.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
@@ -27,7 +32,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "^16.4.0",
     "shadcn": "^3.8.5",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
