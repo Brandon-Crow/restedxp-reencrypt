@@ -40,7 +40,8 @@ npm run prepare:guide
 
 The command decrypts the source locally, verifies its checksum and guide count,
 re-encrypts it to the generic site key, verifies an exact round trip, and writes
-`public/guide-wow-forever.txt`.
+`public/guide-wow-forever.txt`. The website displays that file's preparation
+date. Rebuilding with unchanged guide content preserves the existing date.
 
 To publish an update, replace the two private input files, run the same command,
 test the generated guide, and deploy from that local working tree. The prepared

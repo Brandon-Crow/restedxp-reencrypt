@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { decryptGuideFile, encryptForBattletag } from "../lib/rxp-crypto";
 
@@ -33,11 +33,18 @@ try {
   }
 
   mkdirSync(dirname(outputPath), { recursive: true });
-  writeFileSync(outputPath, encrypted, "utf8");
+  const outputChanged =
+    !existsSync(outputPath) || readFileSync(outputPath, "utf8") !== encrypted;
+  if (outputChanged) {
+    writeFileSync(outputPath, encrypted, "utf8");
+  }
   console.log(
     `Prepared ${verified.guideCount} guide${verified.guideCount === 1 ? "" : "s"} ` +
       `(version ${verified.version}) at ${outputPath}`,
   );
+  if (!outputChanged) {
+    console.log("The prepared guide is unchanged; its update date was preserved.");
+  }
   console.log("The private source file and BattleTag were not copied.");
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);

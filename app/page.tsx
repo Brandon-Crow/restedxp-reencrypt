@@ -1,3 +1,5 @@
+import { statSync } from "node:fs";
+import { join } from "node:path";
 import { FreeKeyModal } from "@/components/free-key-modal";
 import { ReEncryptCard } from "@/components/re-encrypt-card";
 import { WOW_FOREVER_GUIDE } from "@/lib/guides";
@@ -19,7 +21,27 @@ function CompassIcon({ className }: { className?: string }) {
   );
 }
 
+function getGuideUpdatedAt() {
+  try {
+    const modifiedAt = statSync(
+      join(process.cwd(), "public", "guide-wow-forever.txt"),
+    ).mtime;
+
+    return {
+      dateTime: modifiedAt.toISOString(),
+      label: new Intl.DateTimeFormat("en-US", {
+        dateStyle: "long",
+        timeZone: "UTC",
+      }).format(modifiedAt),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
+  const guideUpdatedAt = getGuideUpdatedAt();
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#090d15]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(55,91,126,0.55),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.15),#090d15_75%)]" />
@@ -65,6 +87,18 @@ export default function Home() {
           <h2 className="font-[var(--font-cinzel)] text-xl font-semibold tracking-wide text-gold-bright">
             {WOW_FOREVER_GUIDE.title}
           </h2>
+          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.16em] text-gold-dim/80">
+            {guideUpdatedAt ? (
+              <>
+                Last updated{" "}
+                <time dateTime={guideUpdatedAt.dateTime}>
+                  {guideUpdatedAt.label}
+                </time>
+              </>
+            ) : (
+              "Guide update pending"
+            )}
+          </p>
           <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
             {WOW_FOREVER_GUIDE.description} Enter your BattleTag and the guide
             will be re-encrypted in your browser, ready to download.
